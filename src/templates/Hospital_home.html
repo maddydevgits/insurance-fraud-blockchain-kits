@@ -129,6 +129,8 @@
             <th>Diagnosis</th>
             <th>Claim Start Month</th>
             <th>Total Claim Amount</th>
+            <th>Claim Copy</th>
+            <th>Claim Status</th>
           </tr>
           {% for i in patients_and_claims %}
           <tr>
@@ -141,6 +143,18 @@
             <td>{{i.diagnosis}}</td>
             <td>{{i.start_month}}</td>
             <td>{{i.claim_amount}}</td>
+            <td><a href="http://127.0.0.1:8080/ipfs/{{i.file}}" target="_blank">Click Here</a></td>
+            {%if i.status==0%}
+              <td>Pending</td>
+            {%endif%}
+
+            {%if i.status==1%}
+              <td>Accepted</td>
+            {%endif%}
+
+            {%if i.status==2%}
+              <td>Rejected</td>
+            {%endif%}
           </tr>
           {% endfor %}
         </thead>

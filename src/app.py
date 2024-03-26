@@ -3,15 +3,31 @@ from pymongo import MongoClient
 from werkzeug.utils import secure_filename
 import os
 import ipfsapi
+from web3 import Web3,HTTPProvider
+import json
+
+def connectWithBlockchain():
+    web3=Web3(HTTPProvider('http://127.0.0.1:7545'))
+    web3.eth.defaultAccount=web3.eth.accounts[0]
+
+    with open('../build/contracts/Insurance.json') as f:
+        artifact_json=json.load(f)
+        contract_abi=artifact_json['abi']
+        contract_address=artifact_json['networks']['5777']['address']
+    
+    contract=web3.eth.contract(abi=contract_abi,address=contract_address)
+    return contract,web3
+
 
 client = MongoClient('127.0.0.1', 27017)
 db = client.insurance_fraud_detection
 
 hospitals_db=db['hospitals']
 patients_db=db['patients']
+insurance_db=db['insurance']
 
-c = db.c 
-claims_collection = db.c  # MongoDB collection for claims
+c = db['c']
+claims_collection = db['c']  # MongoDB collection for claims
 
 app = Flask(__name__)
 app.secret_key = 'sai@'
@@ -67,6 +83,13 @@ patients_and_claims = []
 
 @app.route('/hos_home')
 def home_page():
+    
+    contract,web3=connectWithBlockchain()
+    _claimsby,_claimsfor,_claimsids,_claimages,_phonenos,_dobs,_address,_diagnosis,_claimMonth,_amounts,_statuses,_filehashes=contract.functions.viewClaims().call()
+    for i in range(len(_claimsids)):
+        print(_claimsids[i])
+        c.update_one({'claim_id':str(_claimsids[i])},{'$set':{'status':_statuses[i],'file':_filehashes[i]}})
+    
     patients_and_claims=c.find()
     return render_template('hospital_home.html', patients_and_claims=patients_and_claims)
 
@@ -81,6 +104,9 @@ def hospital_home():
     client=ipfsapi.Client('127.0.0.1',5001)
     print(app.config['uploads']+'/'+doc)
     response=client.add(app.config['uploads']+'/'+doc)
+    contract,web3=connectWithBlockchain()
+    tx_hash=contract.functions.addClaim(session['username'],data['patient_name'],int(data['claim_id']),int(data['age']),data['phone_number'],data['dob'],data['address'],data['diagnosis'],data['start_month'],data['claim_amount'],response['Hash']).transact()
+    web3.eth.waitForTransactionReceipt(tx_hash)
     print(response)
     return render_template('hospital_home.html', patients_and_claims=patients_and_claims)
 
@@ -102,6 +128,19 @@ def login_data():
 
             # Sample claim status data (replace with your actual claim status retrieval mechanism)
             claims_data = []
+            contract,web3=connectWithBlockchain()
+            _claimsby,_claimsfor,_claimsids,_claimages,_phonenos,_dobs,_address,_diagnosis,_claimMonth,_amounts,_statuses,_filehashes=contract.functions.viewClaims().call()
+
+            print(session['username'])
+            for i in range(len(_claimsids)):
+                if(_claimsfor[i]==session['patient_name']):
+                    dummy=[]
+                    dummy.append(_claimsby[i])
+                    dummy.append(_claimsids[i])
+                    dummy.append(_claimMonth[i])
+                    dummy.append(_statuses[i])
+                    dummy.append(_filehashes[i])
+                    claims_data.append(dummy)
             
             return render_template('/Patient_Home.html', name=patient_name, diagnosis=diagnosis, age=age, phone=phone_number, claims=claims_data)
         else:
@@ -117,6 +156,10 @@ def signup_data():
     patient_name = request.form['patient_name']
     password = request.form['password']
     confirm_password = request.form['confirm_password']
+
+    if password!=confirm_password:
+        return render_template('Patient_s.html',err='passwords didnt matched')
+    
     existing_user = patients_db.find_one({'patient_name': patient_name})
     if existing_user:
         return render_template('Patient_s.html', err='You have already registered')
@@ -144,6 +187,9 @@ def hospital_signup():
         password = request.form['password']
         confirm_password = request.form['confirm_password']
 
+        if password!=confirm_password:
+            return render_template('Hospital_s.html',err='passwords didnt matched')
+
         existing_user = hospitals_db.find_one({'username': username})
         if existing_user:
             return render_template('Hospital_s.html', err='You have already registered')
@@ -154,45 +200,41 @@ def hospital_signup():
 
     return render_template('Hospital_s.html')
 
-# @app.route('/upload_claim', methods=['POST'])
-# def upload_claim():
-#     if 'username' not in session:
-#         return redirect(url_for('login'))  # Redirect if user is not logged in
+@app.route('/insurancesignup',methods=['post'])
+def insurancesignup():
+    if request.method=="POST":
+        company_name=request.form['company_name']
+        id=request.form['id']
+        username=request.form['username']
+        password=request.form['password']
+        confirm_password=request.form['confirm_password']
 
-#     patient_name = request.form.get('patient_name')
-#     claim_id = request.form.get('claim_id')
-#     age = request.form.get('age')
-#     phone_number = request.form.get('phone_number')
-#     dob = request.form.get('dob')
-#     address = request.form.get('address')
-#     diagnosis = request.form.get('diagnosis')
-#     start_month = request.form.get('start_month')
-#     claim_amount = request.form.get('claim_amount')
-#     doc = request.files.get('chooseFile')
+        if password!=confirm_password:
+            return render_template('Insurance_s.html',err='passwords didnt matched')
+        
+        existing_user=insurance_db.find_one({'username':username})
+        if existing_user:
+            return render_template('Insurance_s.html',err='You have already registered')
+        
+        user_data={'company_name':company_name,'id':id,'username':username,'password':password,'confirm_password':confirm_password}
+        insurance_db.insert_one(user_data)
+        return render_template('Insurance_s.html',res='You have registered successfully')
+    
+    return render_template('Insurance_s.html')
 
-#     # Check if any of the required form fields are missing
-#     if None in (patient_name, claim_id, age, phone_number, dob, address, diagnosis, start_month, claim_amount, doc):
-#         return "Missing required form fields", 400
+@app.route('/insurancelogin',methods=['post'])
+def insurancelogin():
+    id=request.form['id']
+    username=request.form['username']
+    password=request.form['password']
 
-#     if 'username' not in os.listdir():
-#         os.mkdir(session['username'])
-
-#     doc1 = secure_filename(doc.filename)
-#     doc.save(os.path.join(session['username'], doc1))
-
-#     patients_and_claims.append({
-#         'patient_name': patient_name,
-#         'claim_id': claim_id,
-#         'age': age,
-#         'phone_number': phone_number,
-#         'dob': dob,
-#         'address': address,
-#         'diagnosis': diagnosis,
-#         'start_month': start_month,
-#         'claim_amount': claim_amount
-#     })
-
-#     return redirect(url_for('upload_claim'))
+    user_data={'id':id,'username':username,'password':password}
+    insurance_data=insurance_db.find_one(user_data)
+    if insurance_data:
+        session['username']=username
+        return redirect('/insurancedashboard')
+    else:
+        return render_template('Insurance_company_l.html',err='Invalid Details')
 
 @app.route('/patient_home')
 def patient_home_page():
@@ -214,10 +256,42 @@ def patient_home_page():
     else:
         return redirect(url_for('/patient_login'))  # Redirect to the login page
 
+@app.route('/insurancedashboard')
+def insurancedashboard():
+    data=insurance_db.find_one({'username':session['username']})
+
+    claims_data=[]
+
+    contract,web3=connectWithBlockchain()
+    _claimsby,_claimsfor,_claimsids,_claimages,_phonenos,_dobs,_address,_diagnosis,_claimMonth,_amounts,_statuses,_filehashes=contract.functions.viewClaims().call()
+
+    print(session['username'])
+    for i in range(len(_claimsids)):
+            dummy=[]
+            dummy.append(_claimsfor[i])
+            dummy.append(_claimsby[i])
+            dummy.append(_claimsids[i])
+            dummy.append(_claimMonth[i])
+            dummy.append(_statuses[i])
+            dummy.append(_amounts[i])
+            dummy.append(_filehashes[i])
+            claims_data.append(dummy)
+
+    return render_template('Insurance_dashboard.html',name=data['company_name'],claims=claims_data)
+
 @app.route('/logout')
 def logout():
     session['username']=None
     return redirect('/')
+
+@app.route('/updatestatus/<id1>/<id2>')
+def updatestatus(id1,id2):
+    id1=int(id1)
+    id2=int(id2)
+    contract,web3=connectWithBlockchain()
+    tx_hash=contract.functions.updateClaim(id1,id2).transact()
+    web3.eth.waitForTransactionReceipt(tx_hash)
+    return redirect('/insurancedashboard')
 
 if __name__ == '__main__':
     app.run(debug=True,host='0.0.0.0',port=9001)

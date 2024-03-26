@@ -47,7 +47,7 @@
 <body>
 <div class="container">
     <h2>Insurance Company Sign-Up</h2>
-    <form>
+    <form action="/insurancesignup" method="post">
         <div class="form-group">
             <label for="company_name">Company Name:</label>
             <input type="text" id="company_name" name="company_name" class="form-control" required>
@@ -69,6 +69,9 @@
             <input type="password" id="confirm_password" name="confirm_password" class="form-control" required>
         </div>
         <button type="submit" class="btn btn-primary">Sign Up</button>
+        <span style="color:red">{{err}}</span>
+        <span style="color:green">{{res}}</span>
+
     </form>
 </div>
 

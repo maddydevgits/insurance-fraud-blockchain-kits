@@ -55,18 +55,30 @@
       <table>
         <thead>
           <tr>
-            <th>Claim ID</th>
-            <th>Status</th>
+            <th>Claim By</th>
+            <th>Id</th>
             <th>Month</th>
+            <th>Claim Status</th>
+            <th>Claim</th>
             <!-- Add more columns as needed -->
           </tr>
         </thead>
         <tbody>
-          {% for claim in patients_and_claims %}
+          {% for claim in claims %}
           <tr>
-            <td>{{ claim.id }}</td>
-            <td>{{ claim.status }}</td>
-            <td>{{ claim.month }}</td>
+            <td>{{ claim[0] }}</td>
+            <td>{{ claim[1] }}</td>
+            <td>{{claim[2]}}</td>
+            {%if claim[3]==0%}
+              <td>Claim Pending</td>
+            {%endif%}
+            {%if claim[3]==1%}
+              <td>Claim Approved</td>
+            {%endif%}
+            {%if claim[3]==2%}
+              <td>Claim Rejected</td>
+            {%endif%}
+            <td><a href="http://127.0.0.1:8081/ipfs/{{ claim[4] }}" target="_blank">Click Here</a></td>
             <!-- Add more columns as needed -->
           </tr>
           {% endfor %}

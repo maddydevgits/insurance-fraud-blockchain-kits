@@ -47,7 +47,7 @@
 <body>
 <div class="container">
     <h2>Insurance Company Login</h2>
-    <form>
+    <form action="/insurancelogin" method="post">
         <div class="form-group">
             <label for="id">Company ID:</label>
             <input type="text" id="id" name="id" class="form-control" required />
@@ -61,6 +61,7 @@
             <input type="password" id="password" name="password" class="form-control" required>
         </div>
         <button type="submit" class="btn btn-primary">Login</button>
+        <span style="color:red">{{err}}</span>
     </form>
 </div>
 
